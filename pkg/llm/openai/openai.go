@@ -13,10 +13,11 @@ type OpenAI struct {
 	temperature float32
 }
 
-func NewOpenAI(apikey string) *OpenAI {
-	client := openai.NewClient(apikey)
+func NewOpenAI(apikey, baseURL string) *OpenAI {
+	config := openai.DefaultConfig(apikey)
+	config.BaseURL = baseURL
 	return &OpenAI{
-		client:      client,
+		client:      openai.NewClientWithConfig(config),
 		apiKey:      apikey,
 		gptModel:    openai.GPT3Dot5Turbo,
 		temperature: 0.9,
@@ -39,7 +40,7 @@ func (a *OpenAI) Embedding(ctx context.Context, input []string) ([]float32, erro
 }
 
 func (a *OpenAI) Completion(ctx context.Context, prompt string) (string, error) {
-	a.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	_, err := a.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:            a.gptModel,
 		Messages:         nil,
 		MaxTokens:        0,
@@ -53,6 +54,9 @@ func (a *OpenAI) Completion(ctx context.Context, prompt string) (string, error) 
 		LogitBias:        nil,
 		User:             "",
 	})
+	if err != nil {
+		return "", err
+	}
 	return "", nil
 }
 

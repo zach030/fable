@@ -15,7 +15,15 @@ var (
 )
 
 func TestAliyunOSS_Put(t *testing.T) {
-	aliyunOss = NewAliyunOss(endpoint, ak, sk)
-	err := aliyunOss.Put(bucket, "fable", []byte("ai-framework"))
+	aliyunOss, _ = NewAliyunOss(endpoint, ak, sk)
+	err := aliyunOss.Put(bucket, "aa", []byte(("ai-framework")))
 	assert.Nil(t, err)
+}
+
+func TestAliyun(t *testing.T) {
+	t.Run("get", func(t *testing.T) {
+		aliyunOss, _ = NewAliyunOss(endpoint, ak, sk)
+		_, err := aliyunOss.Get(bucket, "aa")
+		t.Log(err)
+	})
 }

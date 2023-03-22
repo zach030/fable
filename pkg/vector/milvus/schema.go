@@ -1,11 +1,16 @@
 package milvus
 
-import "github.com/milvus-io/milvus-sdk-go/v2/entity"
+import (
+	"strconv"
+
+	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"github.com/zach030/fable/pkg/vector/model"
+)
 
 var (
-	defaultCollection      = `fable`
-	defaultValueColumn     = "content"
-	defaultVectorColumn    = "content_vector"
+	defaultCollection      = `medium_articles`
+	defaultValueColumn     = "title"
+	defaultVectorColumn    = "title_vector"
 	fableDefaultCollection = &entity.Schema{
 		CollectionName: defaultCollection,
 		Description:    "this is the example collection for fableh",
@@ -21,7 +26,7 @@ var (
 				Name:     "content_vector",
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
-					entity.TypeParamDim: "768",
+					entity.TypeParamDim: strconv.Itoa(model.OpenAIEmbeddingDimensions),
 				},
 			},
 			{

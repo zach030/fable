@@ -11,12 +11,12 @@ type AliyunOSS struct {
 	*oss.Client
 }
 
-func NewAliyunOss(endpoint, ak, sk string) *AliyunOSS {
+func NewAliyunOss(endpoint, ak, sk string) (*AliyunOSS, error) {
 	client, err := oss.New(endpoint, ak, sk)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return &AliyunOSS{client}
+	return &AliyunOSS{client}, nil
 }
 
 func (a *AliyunOSS) Put(bucket, key string, value []byte) error {
@@ -41,4 +41,12 @@ func (a *AliyunOSS) Get(bucket, key string) ([]byte, error) {
 		return nil, err
 	}
 	return buf, nil
+}
+
+func (a *AliyunOSS) Exist(bucket, key string) (bool, error) {
+	bucketIns, err := a.Bucket(bucket)
+	if err != nil {
+		return false, err
+	}
+	return bucketIns.IsObjectExist(key)
 }

@@ -4,9 +4,13 @@ go 1.19
 
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
+	github.com/go-resty/resty/v2 v2.7.0
+	github.com/google/uuid v1.1.2
 	github.com/milvus-io/milvus-sdk-go/v2 v2.2.1
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/sashabaranov/go-openai v1.5.2
 	github.com/stretchr/testify v1.8.1
+	gopkg.in/yaml.v2 v2.2.3
 )
 
 require (

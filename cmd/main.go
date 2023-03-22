@@ -3,9 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
+
+	"github.com/zach030/fable/pkg/utils"
 
 	"github.com/zach030/fable/pkg/llm"
 	"github.com/zach030/fable/pkg/llm/openai"
@@ -15,55 +14,58 @@ import (
 	"github.com/zach030/fable/pkg/vector/milvus"
 )
 
+func init() {
+	cfg = InitCfg()
+}
+
+var (
+	cfg *FableConfig
+)
+
 type Fable struct {
 	llm       llm.Llm
 	storageDB storage.Storage
 	vectorDB  vector.Vector
 }
 
-func NewFable(cfg *FableConfig) *Fable {
-	vectorDB, err := milvus.NewMilvusClient(cfg.MilvusAddr, cfg.MilvusCollection)
+func NewFable() *Fable {
+	vectorDB, err := milvus.NewMilvusClient(cfg.Milvus.Addr, cfg.Milvus.User, cfg.Milvus.Password)
+	if err != nil {
+		return nil
+	}
+	aliyunOss, err := oss.NewAliyunOss(cfg.AliyunOSS.AliyunOssEndpoint, cfg.AliyunOSS.AliyunOssAccessKey, cfg.AliyunOSS.AliyunOssSecretKey)
 	if err != nil {
 		return nil
 	}
 	return &Fable{
-		llm:       openai.NewOpenAI(cfg.OpenAIApiKey),
-		storageDB: oss.NewAliyunOss(cfg.AliyunOssEndpoint, cfg.AliyunOssAccessKey, cfg.AliyunOssSecretKey),
+		llm:       openai.NewOpenAI(cfg.OpenAI.APIKey, cfg.OpenAI.ProxyURL),
+		storageDB: aliyunOss,
 		vectorDB:  vectorDB,
 	}
 }
 
-func (f *Fable) IngestWithRawData(ctx context.Context, path string) error {
-	buf, err := os.ReadFile(path)
+func (f *Fable) Ingest(ctx context.Context, path, key string) error {
+	buf, hashKey := utils.ReadAndCalcHash(path)
+	var ossKey = hashKey
+	if key != "" {
+		ossKey = key
+	}
+	exist, err := f.storageDB.Exist(cfg.AliyunOSS.Bucket, ossKey)
 	if err != nil {
 		return err
 	}
-	return f.storageDB.Put("", "", buf)
-}
-
-func (f *Fable) IngestWithURL(ctx context.Context, url string) error {
-	resp, err := http.Get(url)
+	if exist {
+		return nil
+	}
+	if err = f.storageDB.Put(cfg.AliyunOSS.Bucket, ossKey, buf); err != nil {
+		return err
+	}
+	embeddings, err := f.llm.Embedding(ctx, []string{string(buf)})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	return f.storageDB.Put("", "", bytes)
-}
-
-func (f *Fable) IndexData(ctx context.Context, key string) error {
-	buf, err := f.storageDB.Get("", key)
-	if err != nil {
-		return err
-	}
-	embedding, err := f.llm.Embedding(ctx, []string{string(buf)})
-	if err != nil {
-		return err
-	}
-	return f.vectorDB.Insert(ctx, string(buf), embedding)
+	vecs := make([][]float32, 0)
+	return f.vectorDB.Insert(ctx, cfg.Milvus.Collection, []string{string(buf)}, append(vecs, embeddings))
 }
 
 func (f *Fable) Search(ctx context.Context, input string) error {
@@ -71,10 +73,24 @@ func (f *Fable) Search(ctx context.Context, input string) error {
 	if err != nil {
 		return err
 	}
-	f.vectorDB.Search(ctx, "", embedding)
-
+	result, err := f.vectorDB.Search(ctx, cfg.Milvus.Collection, "", embedding)
+	if err != nil {
+		return err
+	}
+	ossKey := make([]string, 0, len(result))
+	for _, searchResult := range result {
+		ossKey = append(ossKey, searchResult.Payload)
+	}
+	ossVal := make([]string, 0, len(ossKey))
+	for _, key := range ossKey {
+		buf, err := f.storageDB.Get(cfg.AliyunOSS.Bucket, key)
+		if err != nil {
+			continue
+		}
+		ossVal = append(ossVal, string(buf))
+	}
 	var res string
-	prompt, err := f.llm.PreparePrompt(ctx, []string{input}, []string{res})
+	prompt, err := f.llm.PreparePrompt(ctx, ossVal, []string{res})
 	if err != nil {
 		return err
 	}

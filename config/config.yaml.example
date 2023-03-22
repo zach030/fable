@@ -1,0 +1,14 @@
+openai:
+  apiKey:
+  proxyURL:
+aliyunOSS:
+  aliyunOssEndpoint:
+  aliyunOssAccessKey:
+  aliyunOssSecretKey:
+milvus:
+  addr:
+  user:
+  password:
+qdrant:
+  host:
+  apiKey:
