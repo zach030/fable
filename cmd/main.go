@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 
 	"github.com/zach030/fable/pkg/utils"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/zach030/fable/pkg/storage/oss"
 	"github.com/zach030/fable/pkg/vector"
 	"github.com/zach030/fable/pkg/vector/milvus"
+	"github.com/zach030/fable/pkg/vector/model"
 )
 
 func init() {
@@ -55,45 +58,56 @@ func (f *Fable) Ingest(ctx context.Context, path, key string) error {
 		return err
 	}
 	if exist {
+		log.Println("file exist, no need to ingest")
 		return nil
 	}
 	if err = f.storageDB.Put(cfg.AliyunOSS.Bucket, ossKey, buf); err != nil {
 		return err
 	}
-	embeddings, err := f.llm.Embedding(ctx, []string{string(buf)})
+	log.Println("success put to oss, key=", ossKey)
+	split, err := utils.TextSplit(string(buf))
 	if err != nil {
 		return err
 	}
-	vecs := make([][]float32, 0)
-	return f.vectorDB.Insert(ctx, cfg.Milvus.Collection, []string{string(buf)}, append(vecs, embeddings))
+	var (
+		contents   = make([]string, 0, len(split))
+		embeddings = make([][]float32, 0, len(split))
+	)
+	for _, s := range split {
+		contents = append(contents, s.Content)
+		embedding, err := f.llm.Embedding(ctx, []string{s.Content})
+		if err != nil {
+			return err
+		}
+		embeddings = append(embeddings, embedding)
+	}
+	req := model.NewInsertRequest(cfg.Milvus.Collection, ossKey, contents, embeddings)
+	return f.vectorDB.Insert(ctx, req)
 }
 
 func (f *Fable) Search(ctx context.Context, input string) error {
+	if utils.TokensNum(input) > utils.OpenAITokenLimit {
+		return errors.New("too many input")
+	}
 	embedding, err := f.llm.Embedding(ctx, []string{input})
 	if err != nil {
 		return err
 	}
-	result, err := f.vectorDB.Search(ctx, cfg.Milvus.Collection, "", embedding)
+	log.Println("success call llm embedding with input")
+	result, err := f.vectorDB.Search(ctx, model.NewSearchRequest(cfg.Milvus.Collection, embedding))
 	if err != nil {
 		return err
 	}
-	ossKey := make([]string, 0, len(result))
+	log.Println("success call vectorDB result=", result)
+	indexAnswer := make([]string, 0, len(result))
 	for _, searchResult := range result {
-		ossKey = append(ossKey, searchResult.Payload)
+		indexAnswer = append(indexAnswer, searchResult.Payload)
 	}
-	ossVal := make([]string, 0, len(ossKey))
-	for _, key := range ossKey {
-		buf, err := f.storageDB.Get(cfg.AliyunOSS.Bucket, key)
-		if err != nil {
-			continue
-		}
-		ossVal = append(ossVal, string(buf))
-	}
-	var res string
-	prompt, err := f.llm.PreparePrompt(ctx, ossVal, []string{res})
+	prompt := f.llm.PreparePrompt(1, indexAnswer, input)
 	if err != nil {
 		return err
 	}
+	fmt.Println(prompt)
 	answer, err := f.llm.Completion(ctx, prompt)
 	if err != nil {
 		return err

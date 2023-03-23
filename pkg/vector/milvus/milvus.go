@@ -2,6 +2,7 @@ package milvus
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/zach030/fable/pkg/vector/model"
 
@@ -26,23 +27,29 @@ func NewMilvusClient(addr, user, pwd string) (*MilvusClient, error) {
 	return &MilvusClient{milvusCli}, nil
 }
 
-func (m *MilvusClient) Insert(ctx context.Context, collection string, value []string, vector [][]float32) error {
-	if len(value) != len(vector) {
-		return model.ErrInconsistentLength
-	}
-	for i := range value {
-		val, vec := value[i], vector[i]
-		contentColumn := entity.NewColumnVarChar(defaultValueColumn, []string{val})
-		vecs := make([][]float32, 0)
-		vectorColumn := entity.NewColumnFloatVector(defaultVectorColumn, model.OpenAIEmbeddingDimensions, append(vecs, vec))
-		if _, err := m.Client.Insert(ctx, collection, "", contentColumn, vectorColumn); err != nil {
+func (m *MilvusClient) Insert(ctx context.Context, req *model.InsertRequest) error {
+	collection := req.Collection
+	contentKey := req.ContentKey
+	// contentMetadata := req.Metadata
+	for i, content := range req.Content {
+		embed := req.Embeddings[i]
+		metadata := req.Metadata[i]
+		var (
+			contentKeyColumn = newContentKey(contentKey)
+			contentColumn    = newContent(content)
+			vectorColumn     = newContentVector(embed)
+			metadataColumn   = newMetadata(metadata)
+		)
+		if _, err := m.Client.Insert(ctx, collection, "", contentKeyColumn, contentColumn, vectorColumn, metadataColumn); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *MilvusClient) Search(ctx context.Context, collection, field string, vector []float32) ([]model.SearchResult, error) {
+func (m *MilvusClient) Search(ctx context.Context, req *model.SearchRequest) ([]model.SearchResult, error) {
+	collection := req.Collection
+	vector := req.Vector
 	if err := m.LoadCollection(ctx, collection, false); err != nil {
 		return nil, err
 	}
@@ -51,18 +58,34 @@ func (m *MilvusClient) Search(ctx context.Context, collection, field string, vec
 	if err != nil {
 		return nil, err
 	}
-	res, err := m.Client.Search(ctx, collection, []string{}, "", []string{field}, []entity.Vector{vec}, defaultVectorColumn, entity.L2, 10, sp)
+	res, err := m.Client.Search(ctx, collection, []string{}, "", []string{filedContentKey, filedContent, filedMetadata}, []entity.Vector{vec}, filedContentVector, entity.L2, 10, sp)
 	if err != nil {
 		log.Fatal("fail to search collection:", err.Error())
 	}
 	ret := make([]model.SearchResult, 0, len(res))
 	for _, result := range res {
-		var contentColumn *entity.ColumnVarChar
+		var (
+			contentColumn    *entity.ColumnVarChar
+			contentKeyColumn *entity.ColumnVarChar
+			metadataColumn   *entity.ColumnVarChar
+		)
 		for _, f := range result.Fields {
-			if f.Name() == field {
+			if f.Name() == filedContent {
 				c, ok := f.(*entity.ColumnVarChar)
 				if ok {
 					contentColumn = c
+				}
+			}
+			if f.Name() == filedContentKey {
+				c, ok := f.(*entity.ColumnVarChar)
+				if ok {
+					contentKeyColumn = c
+				}
+			}
+			if f.Name() == filedMetadata {
+				c, ok := f.(*entity.ColumnVarChar)
+				if ok {
+					metadataColumn = c
 				}
 			}
 		}
@@ -71,9 +94,21 @@ func (m *MilvusClient) Search(ctx context.Context, collection, field string, vec
 			if err != nil {
 				return nil, err
 			}
+			key, err := contentKeyColumn.ValueByIdx(i)
+			if err != nil {
+				return nil, err
+			}
+			metadataBuf, err := metadataColumn.ValueByIdx(i)
+			if err != nil {
+				return nil, err
+			}
+			metadata := model.ChunkMetadata{}
+			_ = json.Unmarshal([]byte(metadataBuf), &metadata)
 			ret = append(ret, model.SearchResult{
-				Payload: content,
-				Score:   result.Scores[i],
+				Payload:  content,
+				Key:      key,
+				Metadata: metadata,
+				Score:    result.Scores[i],
 			})
 		}
 	}

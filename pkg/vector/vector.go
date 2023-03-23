@@ -7,6 +7,6 @@ import (
 )
 
 type Vector interface {
-	Insert(ctx context.Context, collection string, value []string, vector [][]float32) error
-	Search(ctx context.Context, collection, field string, vector []float32) ([]model.SearchResult, error)
+	Insert(ctx context.Context, req *model.InsertRequest) error
+	Search(ctx context.Context, req *model.SearchRequest) ([]model.SearchResult, error)
 }
