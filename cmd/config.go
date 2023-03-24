@@ -39,7 +39,7 @@ type Qdrant struct {
 }
 
 func InitCfg() *FableConfig {
-	file, err := os.ReadFile("../config/config.yaml")
+	file, err := os.ReadFile("./config/config.yaml")
 	if err != nil {
 		fmt.Println("read config/config.yaml err:", err)
 		return nil

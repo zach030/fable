@@ -2,6 +2,7 @@ package model
 
 type SearchRequest struct {
 	Collection string
+	ContentKey string
 	Vector     []float32
 }
 
@@ -12,6 +13,6 @@ type SearchResult struct {
 	Metadata ChunkMetadata `json:"metadata"`
 }
 
-func NewSearchRequest(collection string, vector []float32) *SearchRequest {
-	return &SearchRequest{Collection: collection, Vector: vector}
+func NewSearchRequest(collection, contentKey string, vector []float32) *SearchRequest {
+	return &SearchRequest{Collection: collection, ContentKey: contentKey, Vector: vector}
 }

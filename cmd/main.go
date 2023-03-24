@@ -46,7 +46,7 @@ func NewFable() *Fable {
 	}
 }
 
-func (f *Fable) Ingest(ctx context.Context, path, key string) error {
+func (f *Fable) Ingest(ctx context.Context, path, key string) (string, error) {
 	buf, hashKey := utils.ReadAndCalcHash(path)
 	var ossKey = hashKey
 	if key != "" {
@@ -54,19 +54,19 @@ func (f *Fable) Ingest(ctx context.Context, path, key string) error {
 	}
 	exist, err := f.storageDB.Exist(cfg.AliyunOSS.Bucket, ossKey)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if exist {
 		log.Println("file exist, no need to ingest")
-		return nil
+		return "", nil
 	}
 	if err = f.storageDB.Put(cfg.AliyunOSS.Bucket, ossKey, buf); err != nil {
-		return err
+		return "", err
 	}
 	log.Println("success put to oss, key=", ossKey)
 	split, err := utils.TextSplit(string(buf))
 	if err != nil {
-		return err
+		return "", err
 	}
 	var (
 		contents   = make([]string, 0, len(split))
@@ -76,14 +76,17 @@ func (f *Fable) Ingest(ctx context.Context, path, key string) error {
 		contents = append(contents, s.Content)
 		embedding, err := f.llm.Embedding(ctx, []string{s.Content})
 		if err != nil {
-			return err
+			return "", err
 		}
 		embeddings = append(embeddings, embedding)
 	}
-	return f.vectorDB.Insert(ctx, model.NewInsertRequest(cfg.Milvus.Collection, ossKey, contents, embeddings))
+	if err = f.vectorDB.Insert(ctx, model.NewInsertRequest(cfg.Milvus.Collection, ossKey, contents, embeddings)); err != nil {
+		return "", err
+	}
+	return ossKey, nil
 }
 
-func (f *Fable) Search(ctx context.Context, input string) ([]string, error) {
+func (f *Fable) Search(ctx context.Context, input, key string) ([]string, error) {
 	if utils.TokensNum(input) > utils.OpenAITokenLimit {
 		return nil, errors.New("too many input")
 	}
@@ -92,7 +95,7 @@ func (f *Fable) Search(ctx context.Context, input string) ([]string, error) {
 		return nil, err
 	}
 	log.Println("success call llm embedding with input")
-	result, err := f.vectorDB.Search(ctx, model.NewSearchRequest(cfg.Milvus.Collection, embedding))
+	result, err := f.vectorDB.Search(ctx, model.NewSearchRequest(cfg.Milvus.Collection, key, embedding))
 	if err != nil {
 		return nil, err
 	}

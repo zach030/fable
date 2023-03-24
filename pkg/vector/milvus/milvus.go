@@ -3,6 +3,7 @@ package milvus
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/zach030/fable/pkg/vector/model"
 
@@ -57,7 +58,7 @@ func (m *MilvusClient) Search(ctx context.Context, req *model.SearchRequest) ([]
 	if err != nil {
 		return nil, err
 	}
-	res, err := m.Client.Search(ctx, collection, []string{}, "", []string{filedContentKey, filedContent, filedMetadata}, []entity.Vector{vec}, filedContentVector, entity.L2, 10, sp)
+	res, err := m.Client.Search(ctx, collection, []string{}, fmt.Sprintf(`%s in ["%s"]`, filedContentKey, req.ContentKey), []string{filedContentKey, filedContent, filedMetadata}, []entity.Vector{vec}, filedContentVector, entity.L2, 10, sp)
 	if err != nil {
 		log.Fatal("fail to search collection:", err.Error())
 	}
