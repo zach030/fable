@@ -77,10 +77,10 @@ func newMetadata(metadata model.ChunkMetadata) *entity.ColumnVarChar {
 	if err == nil {
 		str = string(buf)
 	}
-	return entity.NewColumnVarChar(filedContent, []string{str})
+	return entity.NewColumnVarChar(filedMetadata, []string{str})
 }
 
 func newContentVector(vec []float32) *entity.ColumnFloatVector {
 	vecs := make([][]float32, 0)
-	return entity.NewColumnFloatVector(filedContent, model.OpenAIEmbeddingDimensions, append(vecs, vec))
+	return entity.NewColumnFloatVector(filedContentVector, model.OpenAIEmbeddingDimensions, append(vecs, vec))
 }

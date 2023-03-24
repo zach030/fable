@@ -30,10 +30,9 @@ func NewMilvusClient(addr, user, pwd string) (*MilvusClient, error) {
 func (m *MilvusClient) Insert(ctx context.Context, req *model.InsertRequest) error {
 	collection := req.Collection
 	contentKey := req.ContentKey
-	// contentMetadata := req.Metadata
+	metadata := model.ChunkMetadata{Author: "zach"}
 	for i, content := range req.Content {
 		embed := req.Embeddings[i]
-		metadata := req.Metadata[i]
 		var (
 			contentKeyColumn = newContentKey(contentKey)
 			contentColumn    = newContent(content)

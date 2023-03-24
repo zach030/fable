@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 
 	"github.com/zach030/fable/pkg/utils"
@@ -81,22 +80,21 @@ func (f *Fable) Ingest(ctx context.Context, path, key string) error {
 		}
 		embeddings = append(embeddings, embedding)
 	}
-	req := model.NewInsertRequest(cfg.Milvus.Collection, ossKey, contents, embeddings)
-	return f.vectorDB.Insert(ctx, req)
+	return f.vectorDB.Insert(ctx, model.NewInsertRequest(cfg.Milvus.Collection, ossKey, contents, embeddings))
 }
 
-func (f *Fable) Search(ctx context.Context, input string) error {
+func (f *Fable) Search(ctx context.Context, input string) ([]string, error) {
 	if utils.TokensNum(input) > utils.OpenAITokenLimit {
-		return errors.New("too many input")
+		return nil, errors.New("too many input")
 	}
 	embedding, err := f.llm.Embedding(ctx, []string{input})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Println("success call llm embedding with input")
 	result, err := f.vectorDB.Search(ctx, model.NewSearchRequest(cfg.Milvus.Collection, embedding))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Println("success call vectorDB result=", result)
 	indexAnswer := make([]string, 0, len(result))
@@ -105,13 +103,11 @@ func (f *Fable) Search(ctx context.Context, input string) error {
 	}
 	prompt := f.llm.PreparePrompt(1, indexAnswer, input)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Println(prompt)
-	answer, err := f.llm.Completion(ctx, prompt)
+	answers, err := f.llm.Completion(ctx, prompt)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Println(answer)
-	return nil
+	return answers, nil
 }

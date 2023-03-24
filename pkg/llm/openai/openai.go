@@ -63,7 +63,7 @@ func (a *OpenAI) Embedding(ctx context.Context, input []string) ([]float32, erro
 	return embeddings, nil
 }
 
-func (a *OpenAI) Completion(ctx context.Context, prompt string) (string, error) {
+func (a *OpenAI) Completion(ctx context.Context, prompt string) ([]string, error) {
 	res, err := a.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: a.gptModel,
 		Messages: []openai.ChatCompletionMessage{
@@ -76,22 +76,23 @@ func (a *OpenAI) Completion(ctx context.Context, prompt string) (string, error) 
 				Content: prompt,
 			},
 		},
-		Temperature: a.temperature,
-		Stream:      true,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	fmt.Println(res)
-	return "", nil
+	var result = make([]string, 0, len(res.Choices))
+	for _, choice := range res.Choices {
+		result = append(result, choice.Message.Content)
+	}
+	return result, nil
 }
 
 func (a *OpenAI) PreparePrompt(lan int, context []string, question string) string {
 	switch lan {
 	case en:
-		return fmt.Sprintf(enPromptTemplate, question, context)
+		return fmt.Sprintf(enPromptTemplate, context, question)
 	case ch:
-		return fmt.Sprintf(chPromptTemplate, question, context)
+		return fmt.Sprintf(chPromptTemplate, context, question)
 	}
 	return ""
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"context"
@@ -16,16 +17,17 @@ const (
 func main() {
 	fable := cmd.NewFable()
 	ctx := context.Background()
-	err := fable.Ingest(ctx, testInput1, "")
+	//err := fable.Ingest(ctx, testInput1, "")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//err = fable.Ingest(ctx, testInput2, "")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	answers, err := fable.Search(ctx, "如何选择合适的索引类型和参数")
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = fable.Ingest(ctx, testInput2, "")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = fable.Search(ctx, "如何选择合适的索引类型和参数")
-	if err != nil {
-		log.Fatal(err)
-	}
+	fmt.Println(answers)
 }
